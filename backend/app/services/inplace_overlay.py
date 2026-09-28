@@ -552,12 +552,17 @@ class InplaceOverlayService:
         - Tự động bo tròn 4 góc mềm mại chuẩn CapCut
         """
         cfg = style_config or {}
-        font_size = int(cfg.get("font_size") or cfg.get("fontSize") or 32)
+        base_font_size = int(cfg.get("font_size") or cfg.get("fontSize") or 34)
         txt_col = cfg.get("text_color") or cfg.get("textColor") or text_color or "yellow"
         box_col = cfg.get("box_color") or cfg.get("boxColor") or "#000000"
         box_op = float(cfg.get("box_opacity") if cfg.get("box_opacity") is not None else cfg.get("boxOpacity", 1.0))
         stroke_col = cfg.get("stroke_color") or cfg.get("strokeColor") or "#000000"
         stroke_w = int(cfg.get("stroke_width") if cfg.get("stroke_width") is not None else cfg.get("strokeWidth", 2))
+
+        # Tự động scale cỡ chữ theo độ phân giải thực của video (chuẩn hóa theo 720p base)
+        # Giúp chữ trên video 1080p, 2K luôn to rõ tương xứng tỉ lệ màn hình, không bị tí hon
+        scale_res = max(1.0, video_w / 640.0)
+        scaled_user_font = int(base_font_size * scale_res)
 
         ass_text_col = cls._hex_to_ass_color(txt_col, default="&H00FFFF&")
         ass_box_col = cls._hex_to_ass_color(box_col, default="&H000000&")
@@ -573,7 +578,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: MaskBox,Arial,28,&H00000000,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
-Style: InplaceText,Arial,{font_size},{ass_text_col},&H000000FF,{ass_stroke_col},&H00000000,-1,0,0,0,100,100,0,0,1,{stroke_w},0,5,10,10,10,1
+Style: InplaceText,Arial,{scaled_user_font},{ass_text_col},&H000000FF,{ass_stroke_col},&H00000000,-1,0,0,0,100,100,0,0,1,{stroke_w},0,5,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -593,19 +598,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # Căn giữa màn hình cho phụ đề
             cx = video_w // 2
 
+            # Cỡ chữ thực tế: Tối thiểu bằng scaled_user_font, nhưng nếu vùng chữ gốc cao thì chữ tự phóng to
+            # lấp đầy ~85% chiều cao khung để chữ to đậm, không bị lọt thỏm
+            font_size = max(scaled_user_font, int(bh * 0.85))
+
             # Ước lượng chiều dài chữ tiếng Việt theo cỡ chữ
             est_text_w = int(len(vi_text) * font_size * 0.58)
 
-            # TÍNH TOÁN BỀ RỘNG KHUNG ĐEN/MÀU VỪA VẶN:
-            # - Ôm khít câu chữ tiếng Việt với lề đệm
-            # - Đủ che kín dòng chữ cũ bên dưới nếu chữ cũ rộng hơn
-            padding_x = int(font_size * 0.65)
-            box_w = max(est_text_w + padding_x * 2, bw + 24)
-            # Giới hạn không vượt quá 94% bề ngang video
-            box_w = min(int(video_w * 0.94), box_w)
+            # BỀ RỘNG KHUNG ĐỆM: Ôm sát chữ vừa vặn, không bị bè rộng thừa thãi
+            padding_x = int(font_size * 0.40)
+            box_w = max(est_text_w + padding_x * 2, bw + 16)
+            box_w = min(int(video_w * 0.95), box_w)
 
-            # Chiều cao khung màu chuẩn mực tương ứng cỡ chữ
-            box_h = max(int(font_size * 1.35), bh + 12)
+            # CHIỀU CAO KHUNG: Ôm sát mép chữ (padding trên dưới cực kỳ sát, chữ chiếm ~88% khung)
+            # Khắc phục hoàn toàn hiện tượng khung to bè mà chữ bé tí teo
+            box_h = max(int(font_size * 1.15), bh + 4)
 
             # Tọa độ hộp che đối xứng ở giữa:
             mask_x1 = max(0, cx - box_w // 2)
@@ -616,15 +623,15 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             start_ass = cls.format_ass_timestamp(t['start_sec'])
             end_ass = cls.format_ass_timestamp(t['end_sec'])
 
-            # Layer 0: Khung màu che (MaskBox) với góc bo tròn mềm mại tự động
+            # Layer 0: Khung màu che (MaskBox) với góc bo tròn mềm mại ôm sát chữ
             if box_op > 0.05:
-                # Tự động tính bán kính bo góc tròn theo cỡ chữ (tỷ lệ chuẩn 10-12px)
-                radius = max(8, min(14, int(font_size * 0.32)))
+                # Bán kính bo góc gọn gàng (4-8px)
+                radius = max(5, min(10, int(box_h * 0.16)))
                 rect_path = cls._build_rounded_rect_path(mask_x1, mask_y1, mask_x2, mask_y2, radius=radius)
                 mask_line = f"Dialogue: 0,{start_ass},{end_ass},MaskBox,,0,0,0,,{{\\pos(0,0)\\p1\\c{ass_box_col}\\1a{ass_box_alpha}\\3c{ass_box_col}\\3a{ass_box_alpha}\\bord0\\shad0}}{rect_path}{{\\p0}}"
                 dialogues.append(mask_line)
 
-            # Layer 1: Chữ tiếng Việt to rõ, đặt chính giữa
+            # Layer 1: Chữ tiếng Việt to rõ, đặt chính giữa khung
             text_line = f"Dialogue: 1,{start_ass},{end_ass},InplaceText,,0,0,0,,{{\\pos({cx},{cy})\\fs{font_size}\\c{ass_text_col}\\bord{stroke_w}\\3c{ass_stroke_col}}}{vi_text}"
             dialogues.append(text_line)
 

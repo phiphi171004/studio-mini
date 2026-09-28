@@ -654,7 +654,7 @@ export const InplaceStyleModal: React.FC<InplaceStyleModalProps> = ({
               <input
                 type="range"
                 min="20"
-                max="48"
+                max="60"
                 step="1"
                 value={style.fontSize}
                 onChange={(e) => onChangeStyle({ ...style, fontSize: Number(e.target.value) })}
