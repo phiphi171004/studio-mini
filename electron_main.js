@@ -343,6 +343,12 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error("[App] Startup error:", err);
   }
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createMainWindow();
+    }
+  });
 });
 
 function setupAutoUpdater() {
@@ -390,13 +396,6 @@ function setupAutoUpdater() {
     console.warn("[AutoUpdater] Setup error:", e);
   }
 }
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
-    }
-  });
-});
 
 app.on("window-all-closed", () => {
   if (pythonProcess) {
