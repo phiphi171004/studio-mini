@@ -807,6 +807,33 @@ async def download_video_to_studio(req: VideoDownloadRequest):
         raise HTTPException(status_code=500, detail=f"Lỗi khi tải video về server: {str(e)}")
 
 # ==========================================
+# 5b. QUẢN LÝ TẢI MODEL AI THEO YÊU CẦU (ON-DEMAND MODEL MANAGER)
+# ==========================================
+@app.get("/api/models/status", summary="Kiểm tra trạng thái các mô hình AI")
+def get_ai_models_status():
+    from .services.model_manager import ModelManagerService
+    return ModelManagerService.get_status()
+
+@app.post("/api/models/download/{model_key}", summary="Bắt đầu tải mô hình AI ngầm")
+def download_ai_model(model_key: str):
+    from .services.model_manager import ModelManagerService
+    try:
+        return ModelManagerService.start_download(model_key)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/models/progress/{model_key}", summary="Lấy tiến trình tải mô hình AI")
+def get_ai_model_progress(model_key: str):
+    from .services.model_manager import ModelManagerService
+    return ModelManagerService.get_progress(model_key)
+
+@app.delete("/api/models/{model_key}", summary="Xóa mô hình AI khỏi máy để giải phóng ổ cứng")
+def delete_ai_model(model_key: str):
+    from .services.model_manager import ModelManagerService
+    ok = ModelManagerService.delete_model(model_key)
+    return {"success": ok}
+
+# ==========================================
 # 6. PHỤC VỤ GIAO DIỆN FRONTEND (DESKTOP / WEB)
 # ==========================================
 FRONTEND_OUT = ROOT_DIR / "frontend" / "out"

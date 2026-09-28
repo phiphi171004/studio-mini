@@ -7,6 +7,7 @@ import { CaptionModal } from "./CaptionModal";
 import { VideoDownloaderModal } from "./VideoDownloaderModal";
 import { ManualRemovalEditorModal, ManualRemovalRegion } from "./ManualRemovalEditorModal";
 import { InplaceStyleModal, InplaceOverlayStyle, DEFAULT_INPLACE_STYLE } from "./InplaceStyleModal";
+import { ModelDownloadModal, ModelInfo } from "./ModelDownloadModal";
 
 interface DubbingStudioProps {
   voices: Voice[];
@@ -138,6 +139,24 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
   const [removeSubtitles, setRemoveSubtitles] = useState<boolean>(true);
   const [subtitleRemovalMode, setSubtitleRemovalMode] = useState<"auto" | "manual">("auto");
   const [subtitleRemovalEngine, setSubtitleRemovalEngine] = useState<"big_lama" | "directml_onnx">("big_lama");
+  const [modelsStatus, setModelsStatus] = useState<Record<string, ModelInfo>>({});
+  const [downloadModalKey, setDownloadModalKey] = useState<"big_lama" | "directml_onnx" | null>(null);
+
+  const fetchModelsStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/models/status");
+      if (res.ok) {
+        const data = await res.json();
+        setModelsStatus(data);
+      }
+    } catch (e) {
+      console.warn("Fetch models status error:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchModelsStatus();
+  }, [fetchModelsStatus]);
   const [manualRegions, setManualRegions] = useState<ManualRemovalRegion[]>([]);
   const [isManualEditorOpen, setIsManualEditorOpen] = useState<boolean>(false);
   const [isEraserMode, setIsEraserMode] = useState<boolean>(false);
@@ -598,6 +617,17 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
     if (!selectedVoiceId) {
       alert("Vui lòng chọn giọng đọc.");
       return;
+    }
+
+    if (removeSubtitles) {
+      if (subtitleRemovalEngine === "big_lama" && !modelsStatus.big_lama?.downloaded) {
+        setDownloadModalKey("big_lama");
+        return;
+      }
+      if (subtitleRemovalEngine === "directml_onnx" && !modelsStatus.directml_onnx?.downloaded) {
+        setDownloadModalKey("directml_onnx");
+        return;
+      }
     }
 
     setIsStarting(true);
@@ -1453,49 +1483,81 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: "2px",
+                      gap: "3px",
                       marginLeft: "4px",
                       paddingLeft: "6px",
                       borderLeft: "1px solid rgba(255, 255, 255, 0.15)",
                     }}
                   >
                     <span style={{ fontSize: "0.7rem", color: "#64748b", marginRight: "2px" }}>Engine:</span>
-                    <button
-                      type="button"
-                      onClick={() => setSubtitleRemovalEngine("big_lama")}
-                      style={{
-                        backgroundColor: subtitleRemovalEngine === "big_lama" ? "#6366f1" : "transparent",
-                        color: subtitleRemovalEngine === "big_lama" ? "#fff" : "#94a3b8",
-                        border: "none",
-                        borderRadius: "5px",
-                        padding: "3px 6px",
-                        fontSize: "0.72rem",
-                        fontWeight: subtitleRemovalEngine === "big_lama" ? 700 : 500,
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                      }}
-                      title="Chạy Big-LaMa chuẩn trên PyTorch CUDA (Tối ưu cho card rời NVIDIA)"
-                    >
-                      🔥 Big-LaMa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSubtitleRemovalEngine("directml_onnx")}
-                      style={{
-                        backgroundColor: subtitleRemovalEngine === "directml_onnx" ? "#10b981" : "transparent",
-                        color: subtitleRemovalEngine === "directml_onnx" ? "#fff" : "#94a3b8",
-                        border: "none",
-                        borderRadius: "5px",
-                        padding: "3px 6px",
-                        fontSize: "0.72rem",
-                        fontWeight: subtitleRemovalEngine === "directml_onnx" ? 700 : 500,
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                      }}
-                      title="Chạy LaMa qua DirectML ONNX (Siêu nhẹ, tiết kiệm VRAM cho GPU yếu / Laptop)"
-                    >
-                      ⚡ DirectML ONNX
-                    </button>
+                    {(() => {
+                      const isBigLamaDownloaded = !!modelsStatus.big_lama?.downloaded;
+                      const isDirectMlDownloaded = !!modelsStatus.directml_onnx?.downloaded;
+
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSubtitleRemovalEngine("big_lama");
+                              if (!isBigLamaDownloaded) {
+                                setDownloadModalKey("big_lama");
+                              }
+                            }}
+                            style={{
+                              backgroundColor: subtitleRemovalEngine === "big_lama" ? "#6366f1" : "transparent",
+                              color: subtitleRemovalEngine === "big_lama" ? "#fff" : "#94a3b8",
+                              border: "1px solid " + (subtitleRemovalEngine === "big_lama" ? "#818cf8" : "transparent"),
+                              borderRadius: "5px",
+                              padding: "2px 7px",
+                              fontSize: "0.72rem",
+                              fontWeight: subtitleRemovalEngine === "big_lama" ? 700 : 500,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              transition: "all 0.2s ease",
+                            }}
+                            title="Chạy Big-LaMa chuẩn trên PyTorch CUDA (Tối ưu cho card rời NVIDIA)"
+                          >
+                            <span>🔥 Big-LaMa</span>
+                            {!isBigLamaDownloaded && (
+                              <span style={{ fontSize: "0.65rem", opacity: 0.85, color: "#fef08a" }}>📥 196M</span>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSubtitleRemovalEngine("directml_onnx");
+                              if (!isDirectMlDownloaded) {
+                                setDownloadModalKey("directml_onnx");
+                              }
+                            }}
+                            style={{
+                              backgroundColor: subtitleRemovalEngine === "directml_onnx" ? "#10b981" : "transparent",
+                              color: subtitleRemovalEngine === "directml_onnx" ? "#fff" : "#94a3b8",
+                              border: "1px solid " + (subtitleRemovalEngine === "directml_onnx" ? "#34d399" : "transparent"),
+                              borderRadius: "5px",
+                              padding: "2px 7px",
+                              fontSize: "0.72rem",
+                              fontWeight: subtitleRemovalEngine === "directml_onnx" ? 700 : 500,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              transition: "all 0.2s ease",
+                            }}
+                            title="Chạy LaMa qua DirectML ONNX (Siêu nhẹ, tiết kiệm VRAM cho GPU yếu / Laptop)"
+                          >
+                            <span>⚡ DirectML ONNX</span>
+                            {!isDirectMlDownloaded && (
+                              <span style={{ fontSize: "0.65rem", opacity: 0.85, color: "#fef08a" }}>📥 197M</span>
+                            )}
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Nút Cài đặt khung xóa khi ở mode manual */}
@@ -1860,6 +1922,18 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
         onClose={() => setIsInplaceStyleModalOpen(false)}
         style={inplaceStyle}
         onChangeStyle={handleUpdateInplaceStyle}
+      />
+
+      {/* Modal Tải Mô Hình AI Theo Yêu Cầu */}
+      <ModelDownloadModal
+        isOpen={downloadModalKey !== null}
+        modelKey={downloadModalKey || "big_lama"}
+        modelInfo={downloadModalKey ? modelsStatus[downloadModalKey] : undefined}
+        onClose={() => setDownloadModalKey(null)}
+        onDownloadComplete={() => {
+          fetchModelsStatus();
+          setDownloadModalKey(null);
+        }}
       />
     </div>
   );
