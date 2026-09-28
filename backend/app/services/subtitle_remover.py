@@ -34,6 +34,19 @@ except ImportError:
         return "ffmpeg"
 
 
+def _get_model_manager():
+    try:
+        from .model_manager import ModelManagerService
+        return ModelManagerService
+    except (ImportError, ValueError):
+        try:
+            from app.services.model_manager import ModelManagerService
+            return ModelManagerService
+        except ImportError:
+            from backend.app.services.model_manager import ModelManagerService
+            return ModelManagerService
+
+
 class SubtitleRemoverService:
     _lama_model = None
     _lama_onnx_session = None
@@ -63,18 +76,6 @@ class SubtitleRemoverService:
             gx, gy = np.meshgrid(np.arange(w), np.arange(h))
             cls._meshgrids[key] = (gx.astype(np.float32), gy.astype(np.float32))
         return cls._meshgrids[key]
-
-def _get_model_manager():
-    try:
-        from .model_manager import ModelManagerService
-        return ModelManagerService
-    except (ImportError, ValueError):
-        try:
-            from app.services.model_manager import ModelManagerService
-            return ModelManagerService
-        except ImportError:
-            from backend.app.services.model_manager import ModelManagerService
-            return ModelManagerService
 
     @classmethod
     def get_yolo_model(cls):
