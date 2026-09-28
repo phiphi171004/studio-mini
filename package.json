@@ -1,0 +1,14 @@
+{
+  "name": "studio-mini-desktop",
+  "version": "1.0.0",
+  "main": "electron_main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.3.0"
+  },
+  "dependencies": {
+    "jianying-subtitle": "^0.2.3"
+  }
+}

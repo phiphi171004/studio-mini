@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Studio Mini - AI Voice Dubbing Studio</title>
+  <meta name="description" content="Studio Lồng Tiếng AI Tự Động: Tách giọng cũ, giữ nhạc nền gốc, lồng tiếng Việt bằng ZeroTTS với Voice Cloning">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Header & Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="22"></line>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Studio Mini <span class="badge-ai">AI DUBBING</span></h1>
+          <p class="brand-subtitle">Lồng tiếng video tự động & Giữ nguyên nhạc nền</p>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" role="tablist">
+        <button id="tab-dubbing-btn" class="tab-btn active" onclick="switchTab('dubbing')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          Studio Lồng Tiếng
+        </button>
+        <button id="tab-voices-btn" class="tab-btn" onclick="switchTab('voices')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          </svg>
+          Kho Giọng Đọc (<span id="voice-count-badge">8</span>)
+        </button>
+      </nav>
+
+      <div class="api-status-pill" id="api-status-pill">
+        <span class="status-dot online"></span>
+        <span class="status-text">Backend Connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+    <!-- TAB 1: DUBBING STUDIO -->
+    <section id="view-dubbing" class="tab-view active">
+      <div class="studio-grid">
+        <!-- Left: Setup & Inputs -->
+        <div class="glass-card config-panel">
+          <div class="card-header">
+            <h2 class="card-title">1. Thiết Lập Video & Giọng Đọc</h2>
+            <p class="card-desc">Tải lên video gốc và chọn giọng AI bạn muốn lồng tiếng</p>
+          </div>
+
+          <form id="dubbing-form" onsubmit="handleStartDubbing(event)">
+            <!-- Video Dropzone -->
+            <div class="form-group">
+              <label class="input-label">Video Gốc Cần Lồng Tiếng</label>
+              <div id="video-dropzone" class="dropzone" onclick="document.getElementById('video-file-input').click()">
+                <input type="file" id="video-file-input" accept="video/mp4,video/quicktime,video/x-matroska" style="display:none" onchange="handleVideoSelect(event)">
+                <div class="dropzone-content" id="dropzone-empty-state">
+                  <div class="dropzone-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                  </div>
+                  <p class="dropzone-title">Kéo & thả video vào đây hoặc <span class="highlight">Duyệt file</span></p>
+                  <p class="dropzone-hint">Hỗ trợ MP4, MOV, MKV (Tối đa 100MB cho prototype)</p>
+                </div>
+
+                <div id="video-selected-state" class="file-preview-card" style="display:none">
+                  <div class="file-icon">🎬</div>
+                  <div class="file-info">
+                    <p id="video-file-name" class="file-name">video.mp4</p>
+                    <p id="video-file-size" class="file-size">15.4 MB</p>
+                  </div>
+                  <button type="button" class="btn-icon" onclick="clearSelectedVideo(event)" title="Chọn video khác">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Voice Selection -->
+            <div class="form-group">
+              <div class="label-row">
+                <label class="input-label" for="voice-select">Chọn Giọng Đọc AI (ZeroTTS)</label>
+                <a href="javascript:void(0)" class="quick-link" onclick="switchTab('voices')">+ Quản lý / Clone Giọng Mới</a>
+              </div>
+              <div class="custom-select-wrapper">
+                <select id="voice-select" class="custom-select" required>
+                  <option value="" disabled selected>Đang tải danh sách giọng đọc...</option>
+                </select>
+              </div>
+              <div id="selected-voice-preview" class="voice-brief-card" style="display:none">
+                <span id="brief-voice-badge" class="badge-preset">PRESET</span>
+                <span id="brief-voice-name" class="brief-name">Mai Chi</span>
+                <span id="brief-voice-desc" class="brief-desc">Nữ chuẩn Bắc</span>
+              </div>
+            </div>
+
+            <!-- Action Button -->
+            <button type="submit" id="start-dub-btn" class="btn btn-primary btn-glow btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Bắt Đầu Lồng Tiếng AI
+            </button>
+          </form>
+        </div>
+
+        <!-- Right: Real-time Pipeline Monitor & Video Result -->
+        <div class="glass-card monitor-panel">
+          <div class="card-header">
+            <h2 class="card-title">2. Tiến Trình Xử Lý & Kết Quả</h2>
+            <p class="card-desc">Theo dõi luồng 8 bước tự động và xem video hoàn thành</p>
+          </div>
+
+          <!-- Empty State when no task running -->
+          <div id="monitor-empty" class="monitor-empty-state">
+            <div class="monitor-empty-icon">⚡</div>
+            <h3>Sẵn sàng xử lý</h3>
+            <p>Chọn video và giọng đọc ở khung bên trái rồi bấm bắt đầu để kích hoạt studio lồng tiếng tự động.</p>
+          </div>
+
+          <!-- Active Pipeline Tracker -->
+          <div id="pipeline-tracker" class="pipeline-tracker" style="display:none">
+            <div class="progress-banner">
+              <div class="progress-info">
+                <span class="progress-status-badge" id="task-status-text">Đang xử lý...</span>
+                <span class="progress-pct" id="task-pct-text">0%</span>
+              </div>
+              <div class="progress-bar-bg">
+                <div id="task-progress-bar" class="progress-bar-fill" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Steps list -->
+            <div class="steps-container">
+              <div class="pipeline-step" id="step-extract">
+                <div class="step-num">1</div>
+                <div class="step-content">
+                  <h4>Trích xuất âm thanh gốc</h4>
+                  <p>Trích xuất audio chất lượng cao từ video gốc</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-demucs">
+                <div class="step-num">2</div>
+                <div class="step-content">
+                  <h4>Tách giọng nói (Demucs)</h4>
+                  <p>Tách Track A (giọng review cũ) & Track B (nhạc nền + SFX)</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-whisper">
+                <div class="step-num">3</div>
+                <div class="step-content">
+                  <h4>Nhận diện giọng nói (faster-whisper)</h4>
+                  <p>Lấy kịch bản và timestamp chính xác của từng câu</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-remove">
+                <div class="step-num">4</div>
+                <div class="step-content">
+                  <h4>Xóa bỏ giọng cũ</h4>
+                  <p>Hủy bỏ track giọng review cũ, giữ lại nhạc nền nguyên bản</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-translate">
+                <div class="step-num">5</div>
+                <div class="step-content">
+                  <h4>Dịch sang tiếng Việt (LLM)</h4>
+                  <p>Dịch súc tích tự nhiên theo đúng ngữ cảnh thuyết minh</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-tts">
+                <div class="step-num">6</div>
+                <div class="step-content">
+                  <h4>Sinh giọng AI mới (ZeroTTS)</h4>
+                  <p>Đọc bản dịch tiếng Việt bằng giọng AI đã chọn</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-align-mix">
+                <div class="step-num">7</div>
+                <div class="step-content">
+                  <h4>Đồng bộ Timeline & Mix Nhạc Nền</h4>
+                  <p>Căn chỉnh không chồng tiếng & mix với nhạc nền gốc</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+
+              <div class="pipeline-step" id="step-merge">
+                <div class="step-num">8</div>
+                <div class="step-content">
+                  <h4>Ghép Video Thành Phẩm</h4>
+                  <p>Hoàn thiện video lồng tiếng mới sẵn sàng tải về</p>
+                </div>
+                <div class="step-status-icon">⏳</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Result Section -->
+          <div id="video-result-box" class="video-result-box" style="display:none">
+            <div class="result-success-badge">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+              Lồng tiếng hoàn tất thành công!
+            </div>
+            <div class="video-player-wrapper">
+              <video id="final-video-player" controls preload="metadata"></video>
+            </div>
+            <div class="result-actions">
+              <a id="download-video-btn" href="#" download class="btn btn-primary btn-glow">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Tải Video Lồng Tiếng
+              </a>
+              <button class="btn btn-secondary" onclick="resetStudio()">
+                Lồng Tiếng Video Khác
+              </button>
+            </div>
+
+            <!-- Subtitle/Timeline Accordion -->
+            <details class="subtitles-accordion" id="subtitles-accordion">
+              <summary>Xem Kịch Bản Đối Thoại Đã Dịch & Căn Chỉnh Timeline</summary>
+              <div id="subtitles-list" class="subtitles-list"></div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: VOICE LIBRARY & CLONING -->
+    <section id="view-voices" class="tab-view">
+      <div class="voice-library-grid">
+        <!-- Left: Clone new voice form -->
+        <div class="glass-card voice-upload-panel">
+          <div class="card-header">
+            <h2 class="card-title">Clone Giọng Đọc Mới</h2>
+            <p class="card-desc">Tải lên đoạn ghi âm mẫu 3-30 giây sạch tiếng để tạo giọng đọc riêng</p>
+          </div>
+
+          <form id="clone-voice-form" onsubmit="handleCloneVoice(event)">
+            <div class="form-group">
+              <label class="input-label" for="clone-name">Tên Giọng Đọc</label>
+              <input type="text" id="clone-name" class="custom-input" placeholder="VD: Giọng Review Nam Trầm..." required>
+            </div>
+
+            <div class="form-group">
+              <label class="input-label" for="clone-desc">Mô Tả / Đặc Điểm</label>
+              <input type="text" id="clone-desc" class="custom-input" placeholder="VD: Giọng truyền cảm, đọc chậm rãi...">
+            </div>
+
+            <div class="form-group">
+              <label class="input-label">File Ghi Âm Mẫu (3 - 30 giây sạch tiếng)</label>
+              <div id="audio-dropzone" class="dropzone dropzone-audio" onclick="document.getElementById('audio-file-input').click()">
+                <input type="file" id="audio-file-input" accept="audio/wav,audio/mpeg,audio/mp3,audio/x-m4a" style="display:none" onchange="handleAudioSelect(event)" required>
+                <div class="dropzone-content" id="audio-empty-state">
+                  <div class="dropzone-icon">🎙️</div>
+                  <p class="dropzone-title">Chọn file ghi âm .WAV hoặc .MP3</p>
+                  <p class="dropzone-hint">Không lẫn nhạc nền hoặc tiếng ồn để giọng clone tự nhiên nhất</p>
+                </div>
+                <div id="audio-selected-state" class="file-preview-card" style="display:none">
+                  <div class="file-icon">🎵</div>
+                  <div class="file-info">
+                    <p id="audio-file-name" class="file-name">sample.wav</p>
+                    <p id="audio-file-size" class="file-size">1.2 MB</p>
+                  </div>
+                  <button type="button" class="btn-icon" onclick="clearSelectedAudio(event)">✕</button>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" id="clone-submit-btn" class="btn btn-primary btn-glow btn-full">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+              </svg>
+              Lưu & Thêm Vào Kho Giọng
+            </button>
+          </form>
+        </div>
+
+        <!-- Right: Voices List -->
+        <div class="glass-card voice-cards-panel">
+          <div class="card-header header-with-badge">
+            <div>
+              <h2 class="card-title">Kho Giọng Đọc Hiện Có</h2>
+              <p class="card-desc">Gồm các giọng có sẵn của ZeroTTS và giọng clone riêng của bạn</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="fetchVoices()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              Làm mới
+            </button>
+          </div>
+
+          <div id="voices-grid" class="voices-grid">
+            <!-- Rendered dynamically by app.js -->
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

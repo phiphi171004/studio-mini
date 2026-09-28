@@ -1,0 +1,54 @@
+# Secrets & Credentials (BẢO VỆ TUYỆT ĐỐI)
+.env
+*.env
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Next.js Build Cache
+frontend/.next/
+frontend/.turbo/
+
+# Python Cache & Virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+build/
+dist/
+
+# Storage & Large Media files (Dữ liệu tải về và video xuất)
+storage/
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/outputs/*
+!storage/outputs/.gitkeep
+storage/*.db
+storage/*.sqlite
+storage/*.sqlite3
+backend/app.db
+*.db
+*.sqlite3
+
+# Large AI Model Weights (Phải đưa lên GitHub Releases, không commit trực tiếp vào git)
+backend/models/*.pt
+backend/models/*.pth
+backend/models/*.bin
+backend/models/*.onnx
+backend/models/*.safetensors
+!backend/models/.gitkeep
+
+# Logs & Temporary files
+*.log
+desktop_app.log
+scratch/
+.system_generated/
+*.tmp
+Thumbs.db
+.DS_Store
