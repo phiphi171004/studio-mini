@@ -11,7 +11,12 @@ load_dotenv(ROOT_DIR / ".env")
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Thư mục lưu trữ media và data
-STORAGE_DIR = ROOT_DIR / "storage"
+storage_env = os.getenv("STUDIO_MINI_STORAGE")
+if storage_env:
+    STORAGE_DIR = Path(storage_env)
+else:
+    STORAGE_DIR = ROOT_DIR / "storage"
+
 VOICES_DIR = STORAGE_DIR / "voices"
 UPLOADS_DIR = STORAGE_DIR / "uploads"
 TEMP_DIR = STORAGE_DIR / "temp"

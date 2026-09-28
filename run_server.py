@@ -21,5 +21,6 @@ if __name__ == "__main__":
     print("  Database: storage/app.db")
     print("=" * 60)
     
-    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, reload=True)
+    is_dev = "--dev" in sys.argv or os.getenv("ENV") == "development"
+    uvicorn.run("backend.app.main:app", host="127.0.0.1", port=8000, reload=is_dev)
 

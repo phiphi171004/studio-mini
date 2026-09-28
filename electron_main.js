@@ -255,21 +255,51 @@ function startBackendServer(pyPath) {
       return resolve(true);
     }
 
-    console.log(`[Electron] Starting Python FastAPI backend with: ${pyPath}`);
-    pythonProcess = spawn(pyPath, ["run_server.py"], {
-      cwd: __dirname,
-      stdio: "ignore",
-      env: {
-        ...process.env,
-        PYTHONIOENCODING: "utf-8",
-        PYTHONUNBUFFERED: "1"
-      },
-      detached: false
-    });
+    const serverDir = app.isPackaged
+      ? path.join(process.resourcesPath, "app.asar.unpacked")
+      : __dirname;
 
-    pythonProcess.on("error", (err) => {
-      console.error("[Electron] Failed to start Python process:", err);
-    });
+    const serverScript = path.join(serverDir, "run_server.py");
+    const storageDir = path.join(USER_DATA, "storage");
+    const logPath = path.join(USER_DATA, "backend.log");
+
+    // Copy voice presets nếu chưa có trong userData
+    try {
+      const presetsSrc = path.join(serverDir, "storage", "voices", "presets");
+      const presetsDest = path.join(storageDir, "voices", "presets");
+      if (fs.existsSync(presetsSrc) && !fs.existsSync(presetsDest)) {
+        fs.mkdirSync(presetsDest, { recursive: true });
+        fs.cpSync(presetsSrc, presetsDest, { recursive: true });
+      }
+    } catch (e) {
+      console.warn("[Electron] Preset copy note:", e);
+    }
+
+    console.log(`[Electron] Starting Python FastAPI backend: ${pyPath} ${serverScript} (cwd: ${serverDir})`);
+    
+    try {
+      const logStream = fs.createWriteStream(logPath, { flags: "a" });
+      pythonProcess = spawn(pyPath, [serverScript], {
+        cwd: serverDir,
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: "utf-8",
+          PYTHONUNBUFFERED: "1",
+          STUDIO_MINI_STORAGE: storageDir
+        },
+        detached: false
+      });
+
+      if (pythonProcess.stdout) pythonProcess.stdout.pipe(logStream);
+      if (pythonProcess.stderr) pythonProcess.stderr.pipe(logStream);
+
+      pythonProcess.on("error", (err) => {
+        console.error("[Electron] Failed to start Python process:", err);
+        try { fs.appendFileSync(logPath, `\n[Electron Error] Failed to start: ${err.message}\n`); } catch(e) {}
+      });
+    } catch (spawnErr) {
+      console.error("[Electron] Spawn error:", spawnErr);
+    }
 
     const ready = await checkBackendReady(30000);
     resolve(ready);

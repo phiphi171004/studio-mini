@@ -48,6 +48,12 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Studio Mini AI"
     },
+    "asarUnpack": [
+      "run_server.py",
+      "backend/**/*",
+      "frontend/out/**/*",
+      "storage/voices/presets/**/*"
+    ],
     "files": [
       "electron_main.js",
       "splash.html",
@@ -56,12 +62,12 @@
       "package.json",
       "backend/**/*",
       "frontend/out/**/*",
+      "storage/voices/presets/**/*",
       "!backend/models/*.pt",
       "!backend/models/*.pth",
       "!backend/models/*.onnx",
       "!backend/app.db",
       "!backend/**/__pycache__/*",
-      "!storage/**/*",
       "!scratch/**/*",
       "!*.log"
     ]
