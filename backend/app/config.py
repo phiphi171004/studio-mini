@@ -21,9 +21,10 @@ VOICES_DIR = STORAGE_DIR / "voices"
 UPLOADS_DIR = STORAGE_DIR / "uploads"
 TEMP_DIR = STORAGE_DIR / "temp"
 OUTPUTS_DIR = STORAGE_DIR / "outputs"
+MODELS_DIR = STORAGE_DIR / "models"
 
 # Đảm bảo các thư mục luôn tồn tại
-for folder in [STORAGE_DIR, VOICES_DIR, UPLOADS_DIR, TEMP_DIR, OUTPUTS_DIR]:
+for folder in [STORAGE_DIR, VOICES_DIR, UPLOADS_DIR, TEMP_DIR, OUTPUTS_DIR, MODELS_DIR]:
     folder.mkdir(parents=True, exist_ok=True)
 
 # Cấu hình SQLite

@@ -68,13 +68,13 @@ class SubtitleRemoverService:
     def get_yolo_model(cls):
         """Mô hình YOLO11-Text chạy nguyên bản trên PyTorch CUDA (~15-20ms/frame), nhanh gấp 10x RapidOCR."""
         if cls._yolo_model is None:
-            models_dir = Path(__file__).resolve().parent.parent.parent / "models"
-            yolo_path = models_dir / "yolo11n-text.pt"
+            from app.services.model_manager import ModelManagerService
+            yolo_path = ModelManagerService.find_model_file("yolo11n-text.pt")
             device = cls.get_device()
             from ultralytics import YOLO
             print(f"[VSR AI] Khởi động mô hình YOLO-Text trên thiết bị: {device}...")
-            if not yolo_path.exists():
-                raise FileNotFoundError(f"Không tìm thấy file trọng số YOLO-Text tại: {yolo_path}")
+            if not yolo_path or not yolo_path.exists():
+                raise FileNotFoundError(f"Không tìm thấy file trọng số YOLO-Text (yolo11n-text.pt).")
             cls._yolo_model = YOLO(str(yolo_path))
             dummy = np.zeros((640, 640, 3), dtype=np.uint8)
             _ = cls._yolo_model(dummy, device=device, verbose=False)
@@ -84,12 +84,12 @@ class SubtitleRemoverService:
     @classmethod
     def get_lama_model(cls):
         if cls._lama_model is None:
-            models_dir = Path(__file__).resolve().parent.parent.parent / "models"
-            model_path = models_dir / "big-lama.pt"
+            from app.services.model_manager import ModelManagerService
+            model_path = ModelManagerService.find_model_file("big-lama.pt")
             device = cls.get_device()
             print(f"[VSR AI] Khởi động mô hình Big-LaMa trên thiết bị: {device}...")
-            if not model_path.exists():
-                raise FileNotFoundError(f"Không tìm thấy file trọng số LaMa tại: {model_path}")
+            if not model_path or not model_path.exists():
+                raise FileNotFoundError(f"Không tìm thấy file trọng số LaMa (big-lama.pt). Vui lòng tải model trong ứng dụng.")
             model = torch.jit.load(str(model_path), map_location=device)
             model.eval()
             cls._lama_model = model
@@ -110,10 +110,10 @@ class SubtitleRemoverService:
         if cls._lama_onnx_session is None:
             try:
                 import onnxruntime as ort
-                models_dir = Path(__file__).resolve().parent.parent.parent / "models"
-                onnx_path = models_dir / "lama.onnx"
-                if not onnx_path.exists():
-                    raise FileNotFoundError(f"Không tìm thấy file lama.onnx tại {onnx_path}")
+                from app.services.model_manager import ModelManagerService
+                onnx_path = ModelManagerService.find_model_file("lama.onnx")
+                if not onnx_path or not onnx_path.exists():
+                    raise FileNotFoundError(f"Không tìm thấy file lama.onnx. Vui lòng tải model trong ứng dụng.")
                 providers = ['DmlExecutionProvider', 'CPUExecutionProvider']
                 print(f"[VSR AI] Khởi động mô hình DirectML ONNX LaMa từ: {onnx_path}...")
                 cls._lama_onnx_session = ort.InferenceSession(str(onnx_path), providers=providers)

@@ -44,19 +44,45 @@ class ModelManagerService:
 
     @classmethod
     def get_models_dir(cls) -> Path:
-        models_dir = Path(__file__).resolve().parent.parent.parent / "models"
-        models_dir.mkdir(parents=True, exist_ok=True)
-        return models_dir
+        from app.config import MODELS_DIR
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        return MODELS_DIR
+
+    @classmethod
+    def find_model_file(cls, filename: str) -> Optional[Path]:
+        """
+        Tìm file model theo thứ tự ưu tiên:
+        1. MODELS_DIR (AppData/.../storage/models - thư mục bền vững không bị xóa khi update app)
+        2. backend/models (thư mục đi kèm ứng dụng hoặc repo phát triển)
+        3. ROOT_DIR/models
+        """
+        from app.config import ROOT_DIR
+        # 1. Kiểm tra trong storage/models bền vững
+        p1 = cls.get_models_dir() / filename
+        if p1.exists() and p1.stat().st_size > 0:
+            return p1
+
+        # 2. Kiểm tra trong backend/models (thư mục đi kèm mã nguồn / bản cài)
+        backend_models = Path(__file__).resolve().parent.parent.parent / "models"
+        p2 = backend_models / filename
+        if p2.exists() and p2.stat().st_size > 0:
+            return p2
+
+        # 3. Kiểm tra trong ROOT_DIR/models
+        p3 = ROOT_DIR / "models" / filename
+        if p3.exists() and p3.stat().st_size > 0:
+            return p3
+
+        return None
 
     @classmethod
     def get_status(cls) -> Dict[str, Any]:
-        """Kiểm tra trạng thái các model trong thư mục models/"""
-        models_dir = cls.get_models_dir()
+        """Kiểm tra trạng thái các model trong hệ thống"""
         result = {}
         for key, conf in MODELS_CONFIG.items():
-            file_path = models_dir / conf["filename"]
-            exists = file_path.exists()
-            file_size = file_path.stat().st_size if exists else 0
+            found_path = cls.find_model_file(conf["filename"])
+            exists = found_path is not None
+            file_size = found_path.stat().st_size if exists else 0
             is_valid = exists and (file_size >= conf["min_size_bytes"])
 
             active_task = cls._download_tasks.get(key, {})
@@ -77,12 +103,11 @@ class ModelManagerService:
 
     @classmethod
     def is_model_downloaded(cls, model_key: str) -> bool:
-        models_dir = cls.get_models_dir()
         conf = MODELS_CONFIG.get(model_key)
         if not conf:
             return False
-        file_path = models_dir / conf["filename"]
-        return file_path.exists() and (file_path.stat().st_size >= conf["min_size_bytes"])
+        found_path = cls.find_model_file(conf["filename"])
+        return found_path is not None and (found_path.stat().st_size >= conf["min_size_bytes"])
 
     @classmethod
     def get_progress(cls, model_key: str) -> Dict[str, Any]:
@@ -220,11 +245,14 @@ class ModelManagerService:
         conf = MODELS_CONFIG.get(model_key)
         if not conf:
             return False
-        models_dir = cls.get_models_dir()
-        target_path = models_dir / conf["filename"]
-        if target_path.exists():
-            target_path.unlink()
-            if model_key in cls._download_tasks:
-                del cls._download_tasks[model_key]
-            return True
+        found_path = cls.find_model_file(conf["filename"])
+        if found_path and found_path.exists():
+            try:
+                found_path.unlink()
+                if model_key in cls._download_tasks:
+                    del cls._download_tasks[model_key]
+                return True
+            except Exception as e:
+                print(f"[ModelManager] Lỗi xóa model {model_key}: {e}")
+                return False
         return False
