@@ -136,9 +136,37 @@
       margin-top: 8px;
       min-height: 16px;
     }
+    .close-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #94a3b8;
+      font-size: 16px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 100;
+      transition: all 0.2s ease;
+      -webkit-app-region: no-drag;
+    }
+
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: #ef4444;
+      color: #fca5a5;
+      transform: scale(1.08);
+    }
   </style>
 </head>
 <body>
+  <button class="close-btn" id="close-btn" title="Đóng ứng dụng">&times;</button>
   <div class="ambient-glow"></div>
   <div class="container">
     <div class="logo-box">🎙️</div>
@@ -159,6 +187,10 @@
 
   <script>
     const { ipcRenderer } = require('electron');
+
+    document.getElementById('close-btn').addEventListener('click', () => {
+      ipcRenderer.send('close-splash');
+    });
 
     ipcRenderer.on('setup-progress', (event, data) => {
       const progressBar = document.getElementById('progress-bar');

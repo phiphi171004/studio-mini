@@ -54,6 +54,19 @@ function createSplashWindow() {
   });
 }
 
+ipcMain.on("close-splash", () => {
+  if (pythonProcess) {
+    try {
+      if (process.platform === "win32") {
+        execSync(`taskkill /pid ${pythonProcess.pid} /f /t`);
+      } else {
+        pythonProcess.kill();
+      }
+    } catch (e) {}
+  }
+  app.quit();
+});
+
 function updateSplashProgress(percent, status, detail = "") {
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.webContents.send("setup-progress", { percent, status, detail });
