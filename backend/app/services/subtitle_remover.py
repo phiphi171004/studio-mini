@@ -1152,11 +1152,11 @@ class SubtitleRemoverService:
 
                 new_boxes_this_frame: List[List[int]] = []
 
-                # YOLO11-Text quét siêu tốc trên GPU CUDA: chạy cách quãng mỗi 2 frame hoặc khi chưa có box (nhanh gấp 3x, không miss chữ)
-                should_detect = (frame_idx % 2 == 0) or (len(active_boxes) == 0)
-                if auto_detect and yolo_model is not None and frame_brightness >= 12.0 and should_detect:
+                # YOLO11-Text quét từng khung hình (Frame-by-Frame Scanning) trên GPU CUDA:
+                # Không bỏ sót bất kỳ chữ nào xuất hiện nhanh/chớp nhoáng, độ nhạy cao conf=0.15, imgsz=640 (~10ms/frame)
+                if auto_detect and yolo_model is not None and frame_brightness >= 12.0:
                     try:
-                        res = yolo_model(frame, device=device, verbose=False, conf=0.16, imgsz=640)
+                        res = yolo_model(frame, device=device, verbose=False, conf=0.15, imgsz=640)
                         if res and len(res[0].boxes) > 0:
                             for b in res[0].boxes:
                                 bx1, by1, bx2, by2 = [int(v) for v in b.xyxy[0].tolist()]
@@ -1183,11 +1183,11 @@ class SubtitleRemoverService:
                                     ob_cy = (ob[1] + ob[3]) / 2.0
                                     if abs(ob_cy - c_y) < 22 and not (ebx2 < ob[0] - 25 or ebx1 > ob[2] + 25):
                                         binfo['box'] = [min(ob[0], ebx1), min(ob[1], eby1), max(ob[2], ebx2), max(ob[3], eby2)]
-                                        binfo['ttl'] = 8  # Duy trì 8 frames (~0.27s) triệt tiêu hoàn toàn chớp tắt phụ đề giữa các frame
+                                        binfo['ttl'] = 4  # Duy trì 4 frames (~0.13s) đảm bảo chữ biến mất là dứt điểm ngay
                                         matched = True
                                         break
                                 if not matched:
-                                    active_boxes[next_box_id] = {'box': box, 'ttl': 8}
+                                    active_boxes[next_box_id] = {'box': box, 'ttl': 4}
                                     next_box_id += 1
                                     new_boxes_this_frame.append(box)
                     except Exception as e:
