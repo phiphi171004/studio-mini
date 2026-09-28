@@ -1,14 +1,69 @@
 {
   "name": "studio-mini-desktop",
   "version": "1.0.0",
+  "description": "Studio Mini - AI Voice Dubbing & Smart Video Editing",
   "main": "electron_main.js",
+  "author": "phiphi171004",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder",
+    "pack": "electron-builder --dir"
   },
   "devDependencies": {
-    "electron": "^44.3.0"
+    "electron": "^44.3.0",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "jianying-subtitle": "^0.2.3"
+  },
+  "build": {
+    "appId": "com.phiphi.studiomini",
+    "productName": "Studio Mini AI",
+    "directories": {
+      "output": "dist"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "phiphi171004",
+        "repo": "studio-mini"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "frontend/out/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Studio Mini AI"
+    },
+    "files": [
+      "electron_main.js",
+      "splash.html",
+      "version.json",
+      "run_server.py",
+      "package.json",
+      "backend/**/*",
+      "frontend/out/**/*",
+      "!backend/models/*.pt",
+      "!backend/models/*.pth",
+      "!backend/models/*.onnx",
+      "!backend/app.db",
+      "!backend/**/__pycache__/*",
+      "!storage/**/*",
+      "!scratch/**/*",
+      "!*.log"
+    ]
   }
 }

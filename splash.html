@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Studio Mini — Đang Khởi Động</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background: #090d16;
+      color: #f8fafc;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justifyContent: center;
+      padding: 32px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+    }
+
+    .ambient-glow {
+      position: absolute;
+      width: 250px;
+      height: 250px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, rgba(168, 85, 247, 0.15) 50%, transparent 70%);
+      top: -50px;
+      left: 50%;
+      transform: translateX(-50%);
+      filter: blur(40px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .logo-box {
+      width: 68px;
+      height: 68px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+      display: flex;
+      align-items: center;
+      justifyContent: center;
+      font-size: 2.2rem;
+      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5), 0 0 20px rgba(168, 85, 247, 0.3);
+      margin-bottom: 18px;
+      animation: pulse 3s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5); }
+      50% { transform: scale(1.05); box-shadow: 0 15px 35px -5px rgba(236, 72, 153, 0.6); }
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      margin-bottom: 24px;
+    }
+
+    .progress-wrapper {
+      width: 100%;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 3px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+      margin-bottom: 12px;
+    }
+
+    .progress-bar {
+      height: 8px;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899);
+      width: 0%;
+      transition: width 0.25s ease-out;
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.6);
+    }
+
+    .status-row {
+      width: 100%;
+      display: flex;
+      justifyContent: space-between;
+      align-items: center;
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+
+    #status-text {
+      color: #e2e8f0;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 280px;
+      text-align: left;
+    }
+
+    #percent-text {
+      font-weight: 700;
+      color: #a855f7;
+    }
+
+    .detail-text {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 8px;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow"></div>
+  <div class="container">
+    <div class="logo-box">🎙️</div>
+    <h1>Studio Mini AI</h1>
+    <div class="subtitle">Trợ Lý Biên Tập Video & Lồng Tiếng Thông Minh</div>
+
+    <div class="progress-wrapper">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <div class="status-row">
+      <span id="status-text">Đang kiểm tra tài nguyên hệ thống...</span>
+      <span id="percent-text">0%</span>
+    </div>
+
+    <div class="detail-text" id="detail-text">Vui lòng chờ trong giây lát...</div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    ipcRenderer.on('setup-progress', (event, data) => {
+      const progressBar = document.getElementById('progress-bar');
+      const statusText = document.getElementById('status-text');
+      const percentText = document.getElementById('percent-text');
+      const detailText = document.getElementById('detail-text');
+
+      if (data.percent !== undefined) {
+        const p = Math.min(100, Math.max(0, Math.round(data.percent)));
+        progressBar.style.width = p + '%';
+        percentText.innerText = p + '%';
+      }
+
+      if (data.status) {
+        statusText.innerText = data.status;
+      }
+
+      if (data.detail) {
+        detailText.innerText = data.detail;
+      }
+    });
+  </script>
+</body>
+</html>
