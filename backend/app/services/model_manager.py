@@ -39,14 +39,26 @@ MODELS_CONFIG: Dict[str, Dict[str, Any]] = {
     }
 }
 
+def _get_config():
+    try:
+        from .. import config
+        return config
+    except (ImportError, ValueError):
+        try:
+            from app import config
+            return config
+        except ImportError:
+            from backend.app import config
+            return config
+
 class ModelManagerService:
     _download_tasks: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
     def get_models_dir(cls) -> Path:
-        from app.config import MODELS_DIR
-        MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        return MODELS_DIR
+        cfg = _get_config()
+        cfg.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        return cfg.MODELS_DIR
 
     @classmethod
     def find_model_file(cls, filename: str) -> Optional[Path]:
@@ -56,7 +68,7 @@ class ModelManagerService:
         2. backend/models (thư mục đi kèm ứng dụng hoặc repo phát triển)
         3. ROOT_DIR/models
         """
-        from app.config import ROOT_DIR
+        cfg = _get_config()
         # 1. Kiểm tra trong storage/models bền vững
         p1 = cls.get_models_dir() / filename
         if p1.exists() and p1.stat().st_size > 0:

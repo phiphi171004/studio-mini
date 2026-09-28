@@ -64,12 +64,24 @@ class SubtitleRemoverService:
             cls._meshgrids[key] = (gx.astype(np.float32), gy.astype(np.float32))
         return cls._meshgrids[key]
 
+def _get_model_manager():
+    try:
+        from .model_manager import ModelManagerService
+        return ModelManagerService
+    except (ImportError, ValueError):
+        try:
+            from app.services.model_manager import ModelManagerService
+            return ModelManagerService
+        except ImportError:
+            from backend.app.services.model_manager import ModelManagerService
+            return ModelManagerService
+
     @classmethod
     def get_yolo_model(cls):
         """Mô hình YOLO11-Text chạy nguyên bản trên PyTorch CUDA (~15-20ms/frame), nhanh gấp 10x RapidOCR."""
         if cls._yolo_model is None:
-            from app.services.model_manager import ModelManagerService
-            yolo_path = ModelManagerService.find_model_file("yolo11n-text.pt")
+            mgr = _get_model_manager()
+            yolo_path = mgr.find_model_file("yolo11n-text.pt")
             device = cls.get_device()
             from ultralytics import YOLO
             print(f"[VSR AI] Khởi động mô hình YOLO-Text trên thiết bị: {device}...")
@@ -84,8 +96,8 @@ class SubtitleRemoverService:
     @classmethod
     def get_lama_model(cls):
         if cls._lama_model is None:
-            from app.services.model_manager import ModelManagerService
-            model_path = ModelManagerService.find_model_file("big-lama.pt")
+            mgr = _get_model_manager()
+            model_path = mgr.find_model_file("big-lama.pt")
             device = cls.get_device()
             print(f"[VSR AI] Khởi động mô hình Big-LaMa trên thiết bị: {device}...")
             if not model_path or not model_path.exists():
@@ -110,8 +122,8 @@ class SubtitleRemoverService:
         if cls._lama_onnx_session is None:
             try:
                 import onnxruntime as ort
-                from app.services.model_manager import ModelManagerService
-                onnx_path = ModelManagerService.find_model_file("lama.onnx")
+                mgr = _get_model_manager()
+                onnx_path = mgr.find_model_file("lama.onnx")
                 if not onnx_path or not onnx_path.exists():
                     raise FileNotFoundError(f"Không tìm thấy file lama.onnx. Vui lòng tải model trong ứng dụng.")
                 providers = ['DmlExecutionProvider', 'CPUExecutionProvider']

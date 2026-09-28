@@ -11,8 +11,10 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 if __name__ == "__main__":
-    # Add current directory to sys.path
-    sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+    # Add current directory and backend directory to sys.path
+    curr_dir = os.path.abspath(os.path.dirname(__file__))
+    sys.path.insert(0, curr_dir)
+    sys.path.insert(0, os.path.join(curr_dir, "backend"))
     
     print("=" * 60)
     print("  STUDIO MINI - AI VOICE DUBBING BACKEND SERVER")
