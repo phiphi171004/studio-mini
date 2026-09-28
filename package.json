@@ -1,6 +1,6 @@
 {
   "name": "studio-mini-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Studio Mini - AI Voice Dubbing & Smart Video Editing",
   "main": "electron_main.js",
   "author": "phiphi171004",
@@ -46,7 +46,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Studio Mini AI"
+      "shortcutName": "Studio Mini AI",
+      "artifactName": "Studio-Mini-AI-Setup-${version}.${ext}"
     },
     "asarUnpack": [
       "run_server.py",
