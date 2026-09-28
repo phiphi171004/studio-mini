@@ -296,10 +296,14 @@ class SubtitleRemoverService:
         dilated = cv2.dilate(filled, kernel5, iterations=1)
 
         mask_ratio = np.sum(dilated > 0) / (rh * rw)
-        # Chỉ fallback thành khối đặc nếu hoàn toàn không bóc tách được nét chữ (< 2%)
-        # Luôn ưu tiên Stroke-Level Mask ôm sát nét chữ để bảo toàn màu nền và loại bỏ triệt để mọi vệt xám/vệt mờ
-        if mask_ratio < 0.02:
-            return np.ones((rh, rw), dtype=np.uint8) * 255
+        # Nếu không có nét chữ rõ ràng (< 1.5%), không vẽ mask để bảo toàn 100% nền thật, không tạo vệt ố
+        if mask_ratio < 0.015:
+            return np.zeros((rh, rw), dtype=np.uint8)
+
+        # Nếu mask quá dày (> 65% do nền có nhiều chi tiết gai/nhiễu), co nhẹ để giữ lại texture nền
+        if mask_ratio > 0.65:
+            kernel_shrink = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+            dilated = cv2.erode(dilated, kernel_shrink, iterations=1)
 
         return dilated
 
@@ -976,11 +980,12 @@ class SubtitleRemoverService:
                 if not buf:
                     return
 
-                # 1. Thu thập tất cả các khoảng Y từ các box trong batch với lề an toàn gọn (12px)
+                # 1. Thu thập tất cả các khoảng Y từ các box trong batch với lề bối cảnh 32px để LaMa nhận đủ texture xung quanh
+                pad_y_ctx = 32
                 all_intervals = []
                 for _, _, b_list in buf:
                     for b in b_list:
-                        all_intervals.append((max(0, b[1] - 12), min(h, b[3] + 12)))
+                        all_intervals.append((max(0, b[1] - pad_y_ctx), min(h, b[3] + pad_y_ctx)))
 
                 curr_frames = [item[0].copy() for item in buf]
                 masks = [item[1] for item in buf]
@@ -1005,9 +1010,13 @@ class SubtitleRemoverService:
                 # 3. Xử lý từng dải Y ở ĐỘ PHÂN GIẢI GỐC (Native Resolution - Giữ nguyên 100% độ sắc nét)
                 sample_gray = cv2.cvtColor(curr_frames[0], cv2.COLOR_BGR2GRAY)
                 for y_start, y_end in merged_bands:
-                    # Lề an toàn vừa phải (12px) để cung cấp context cho LaMa mà không lấn sâu sang vùng khác
-                    y_start = max(0, y_start - 12)
-                    y_end = min(h, y_end + 12)
+                    # Đảm bảo chiều cao chia hết cho 8 để FFC Fourier convolutions chạy chuẩn xác không méo tỷ lệ
+                    h_band = y_end - y_start
+                    rem = h_band % 8
+                    if rem != 0:
+                        y_end = min(h, y_end + (8 - rem))
+                        if (y_end - y_start) % 8 != 0:
+                            y_start = max(0, y_start - ((y_end - y_start) % 8))
 
                     active_indices = [i for i, m in enumerate(masks) if m[y_start:y_end, :].any()]
                     if not active_indices:
@@ -1141,13 +1150,13 @@ class SubtitleRemoverService:
                                 for bid, binfo in active_boxes.items():
                                     ob = binfo['box']
                                     ob_cy = (ob[1] + ob[3]) / 2.0
-                                    if abs(ob_cy - c_y) < 32 and not (ebx2 < ob[0] - 50 or ebx1 > ob[2] + 50):
+                                    if abs(ob_cy - c_y) < 24 and not (ebx2 < ob[0] - 20 or ebx1 > ob[2] + 20):
                                         binfo['box'] = [min(ob[0], ebx1), min(ob[1], eby1), max(ob[2], ebx2), max(ob[3], eby2)]
-                                        binfo['ttl'] = 4  # Duy trì 4 frame mượt mà
+                                        binfo['ttl'] = 2  # Duy trì tối đa 2 frame để không lưu box rác
                                         matched = True
                                         break
                                 if not matched:
-                                    active_boxes[next_box_id] = {'box': box, 'ttl': 4}
+                                    active_boxes[next_box_id] = {'box': box, 'ttl': 2}
                                     next_box_id += 1
                                     new_boxes_this_frame.append(box)
                     except Exception as e:
@@ -1159,7 +1168,10 @@ class SubtitleRemoverService:
                     if nx2 > nx1 and ny2 > ny1:
                         for w_item in sliding_window:
                             w_item['boxes'].append(nb)
-                            cv2.rectangle(w_item['mask'], (nx1, ny1), (nx2, ny2), 255, -1)
+                            roi_w = w_item['frame'][ny1:ny2, nx1:nx2]
+                            s_mask_w = cls.extract_text_stroke_mask(roi_w)
+                            if s_mask_w.any():
+                                w_item['mask'][ny1:ny2, nx1:nx2] = cv2.bitwise_or(w_item['mask'][ny1:ny2, nx1:nx2], s_mask_w)
 
                 # Giảm thời gian sống TTL của active boxes
                 dead_ids = [bid for bid, binfo in active_boxes.items() if binfo['ttl'] <= 0]
@@ -1177,18 +1189,27 @@ class SubtitleRemoverService:
 
                 frame_boxes = [binfo['box'] for binfo in active_boxes.values()] + manual_boxes_this_frame
 
-                # Tạo Mask: Tô kín toàn bộ vùng text phát hiện được để LaMa xóa sạch 100% không sót nét hay bóng chữ
+                # Tạo Mask: Bóc tách chính xác từng nét chữ (Text-Stroke Masking) thay vì hình chữ nhật đặc
                 curr_mask = np.zeros((h, w), dtype=np.uint8)
                 for bx in manual_boxes_this_frame:
                     bx1, by1, bx2, by2 = max(0, bx[0]), max(0, bx[1]), min(w, bx[2]), min(h, bx[3])
                     if bx2 > bx1 and by2 > by1:
-                        cv2.rectangle(curr_mask, (bx1, by1), (bx2, by2), 255, -1)
+                        roi = frame[by1:by2, bx1:bx2]
+                        s_mask = cls.extract_text_stroke_mask(roi)
+                        if s_mask.any():
+                            curr_mask[by1:by2, bx1:bx2] = cv2.bitwise_or(curr_mask[by1:by2, bx1:bx2], s_mask)
+                        else:
+                            # Fallback hộp đặc nếu vùng chọn tay không bóc tách được nét (ví dụ che logo phẳng)
+                            cv2.rectangle(curr_mask, (bx1, by1), (bx2, by2), 255, -1)
 
                 for binfo in active_boxes.values():
                     bx = binfo['box']
                     bx1, by1, bx2, by2 = max(0, bx[0]), max(0, bx[1]), min(w, bx[2]), min(h, bx[3])
                     if bx2 > bx1 and by2 > by1:
-                        cv2.rectangle(curr_mask, (bx1, by1), (bx2, by2), 255, -1)
+                        roi = frame[by1:by2, bx1:bx2]
+                        s_mask = cls.extract_text_stroke_mask(roi)
+                        if s_mask.any():
+                            curr_mask[by1:by2, bx1:bx2] = cv2.bitwise_or(curr_mask[by1:by2, bx1:bx2], s_mask)
 
                 sliding_window.append({
                     'idx': frame_idx,
