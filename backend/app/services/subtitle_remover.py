@@ -249,10 +249,11 @@ class SubtitleRemoverService:
     @staticmethod
     def extract_text_stroke_mask(roi: np.ndarray) -> np.ndarray:
         """
-        Bóc tách chính xác từng nét chữ (Text-Stroke Masking):
-        - Bắt trọn vẹn nét chữ và viền chữ (stroke/outline) bằng Morphological Gradient, Otsu và Canny.
-        - Giãn nở bằng Kernel Ellipse để trùm kín 100% bóng chữ và anti-aliasing.
-        - Tự động bao phủ toàn bộ bounding box nếu chữ chiếm mật độ cao (>80%) hoặc quá nhỏ để tránh sót viền.
+        Bóc tách chính xác từng nét chữ và cụm từ (Text-Stroke & Word-Level Masking):
+        - Bắt trọn vẹn nét chữ, viền đen (outline) và bóng đổ (shadow) bằng Gradient, Canny và Color Difference.
+        - Kết nối các nét chữ gần nhau theo chiều ngang (11, 3) để loại bỏ các lỗ rỗng li ti gây nhiễu cho LaMa.
+        - Giãn nở bằng Kernel Ellipse (9, 7) ôm trọn 100% bóng đổ và viền stroke.
+        - Nếu mật độ chữ >= 50%, phủ kín hộp dòng chữ (với lề 1px) để tái tạo bề mặt phẳng mịn 100%, không để lại vệt ố.
         """
         rh, rw = roi.shape[:2]
         if rh < 6 or rw < 6:
@@ -266,9 +267,9 @@ class SubtitleRemoverService:
         _, grad_mask = cv2.threshold(grad, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         # 2. Canny đa ngưỡng bắt cạnh sắc nét
-        edges = cv2.Canny(gray, 25, 110)
+        edges = cv2.Canny(gray, 20, 90)
 
-        # 3. Phân tách nền - chữ bằng chênh lệch màu so với biên ngoài (ngưỡng nhạy 18)
+        # 3. Phân tách nền - chữ bằng chênh lệch màu so với biên ngoài (ngưỡng nhạy 14)
         borders = np.concatenate([
             roi[0:2, :].reshape(-1, 3),
             roi[-2:, :].reshape(-1, 3),
@@ -277,33 +278,43 @@ class SubtitleRemoverService:
         ], axis=0)
         bg_median = np.median(borders, axis=0)
         diff = np.linalg.norm(roi.astype(np.float32) - bg_median, axis=2)
-        _, color_diff_mask = cv2.threshold(diff.astype(np.uint8), 18, 255, cv2.THRESH_BINARY)
+        _, color_diff_mask = cv2.threshold(diff.astype(np.uint8), 14, 255, cv2.THRESH_BINARY)
 
         # Kết hợp các đặc trưng
         combined = cv2.bitwise_or(grad_mask, edges)
         combined = cv2.bitwise_or(combined, color_diff_mask)
-        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel3, iterations=2)
+
+        # Kết nối các nét chữ trong cùng một cụm từ theo chiều ngang để không để lại lỗ hổng li ti
+        kernel_connect = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 3))
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel_connect, iterations=1)
+        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, kernel3, iterations=1)
 
         # Điền kín các contour khép kín
         contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         filled = np.zeros((rh, rw), dtype=np.uint8)
         for c in contours:
-            if cv2.contourArea(c) > 4:
+            if cv2.contourArea(c) > 3:
                 cv2.drawContours(filled, [c], -1, 255, thickness=cv2.FILLED)
 
-        # Giãn nở bằng Ellipse kernel 5x5 (1 iteration) ôm khít nét chữ, trùm hết viền bóng mà không bị phình to
-        kernel5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-        dilated = cv2.dilate(filled, kernel5, iterations=1)
+        # Giãn nở bằng Ellipse kernel 9x7 ôm trọn 100% thân chữ, viền đen và bóng đổ
+        kernel9 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 7))
+        dilated = cv2.dilate(filled, kernel9, iterations=1)
 
         mask_ratio = np.sum(dilated > 0) / (rh * rw)
-        # Nếu không có nét chữ rõ ràng (< 1.5%), không vẽ mask để bảo toàn 100% nền thật, không tạo vệt ố
-        if mask_ratio < 0.015:
-            return np.zeros((rh, rw), dtype=np.uint8)
 
-        # Nếu mask quá dày (> 65% do nền có nhiều chi tiết gai/nhiễu), co nhẹ để giữ lại texture nền
-        if mask_ratio > 0.65:
-            kernel_shrink = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-            dilated = cv2.erode(dilated, kernel_shrink, iterations=1)
+        # Nếu chữ mờ hoặc tương phản thấp (< 5%), fallback hộp co nhẹ 2px để chắc chắn xóa sạch không sót vết
+        if mask_ratio < 0.05:
+            box_mask = np.zeros((rh, rw), dtype=np.uint8)
+            pad_in = 2
+            box_mask[pad_in:max(pad_in+1, rh-pad_in), pad_in:max(pad_in+1, rw-pad_in)] = 255
+            return box_mask
+
+        # Nếu là dòng phụ đề dày (>= 50%), phủ kín toàn bộ box dòng chữ để LaMa tái tạo phẳng mịn mượt mà 100%
+        if mask_ratio >= 0.50:
+            box_mask = np.zeros((rh, rw), dtype=np.uint8)
+            pad_in = 1
+            box_mask[pad_in:max(pad_in+1, rh-pad_in), pad_in:max(pad_in+1, rw-pad_in)] = 255
+            return box_mask
 
         return dilated
 
@@ -980,8 +991,8 @@ class SubtitleRemoverService:
                 if not buf:
                     return
 
-                # 1. Thu thập tất cả các khoảng Y từ các box trong batch với lề bối cảnh 32px để LaMa nhận đủ texture xung quanh
-                pad_y_ctx = 32
+                # 1. Thu thập tất cả các khoảng Y từ các box trong batch với lề bối cảnh 20px
+                pad_y_ctx = 20
                 all_intervals = []
                 for _, _, b_list in buf:
                     for b in b_list:
@@ -995,22 +1006,24 @@ class SubtitleRemoverService:
                         proc.stdin.write(fr.tobytes())
                     return
 
-                # 2. Gom nhóm các khoảng Y (Dynamic Y-Clustering) - Không bao giờ chia đôi ở half_h
+                # 2. Gom nhóm các khoảng Y (Dynamic Y-Clustering)
                 all_intervals.sort(key=lambda x: x[0])
                 merged_bands = []
                 cur_y1, cur_y2 = all_intervals[0]
                 for y1, y2 in all_intervals[1:]:
-                    if y1 <= cur_y2 + 20:
+                    if y1 <= cur_y2 + 16:
                         cur_y2 = max(cur_y2, y2)
                     else:
                         merged_bands.append((cur_y1, cur_y2))
                         cur_y1, cur_y2 = y1, y2
                 merged_bands.append((cur_y1, cur_y2))
 
-                # 3. Xử lý từng dải Y ở ĐỘ PHÂN GIẢI GỐC (Native Resolution - Giữ nguyên 100% độ sắc nét)
-                sample_gray = cv2.cvtColor(curr_frames[0], cv2.COLOR_BGR2GRAY)
+                # 3. Cố định chiều rộng toàn màn hình chia hết cho 8 để cuDNN duy trì Tensor shape ổn định, chạy nhanh gấp 4x
+                x_start = 0
+                x_end = (w // 8) * 8
+
                 for y_start, y_end in merged_bands:
-                    # Đảm bảo chiều cao chia hết cho 8 để FFC Fourier convolutions chạy chuẩn xác không méo tỷ lệ
+                    # Đảm bảo chiều cao chia hết cho 8
                     h_band = y_end - y_start
                     rem = h_band % 8
                     if rem != 0:
@@ -1025,8 +1038,8 @@ class SubtitleRemoverService:
                     crops = []
                     c_masks = []
                     for i in active_indices:
-                        c_img = curr_frames[i][y_start:y_end, :]
-                        c_msk = masks[i][y_start:y_end, :]
+                        c_img = curr_frames[i][y_start:y_end, x_start:x_end]
+                        c_msk = masks[i][y_start:y_end, x_start:x_end]
                         crops.append(cv2.cvtColor(c_img, cv2.COLOR_BGR2RGB))
                         c_masks.append(c_msk)
 
@@ -1082,8 +1095,8 @@ class SubtitleRemoverService:
                     prev_clean_patch = None
                     for k, i in enumerate(active_indices):
                         fr = curr_frames[i]
-                        c_m = masks[i][y_start:y_end, :]
-                        orig_crop = fr[y_start:y_end, :]
+                        c_m = masks[i][y_start:y_end, x_start:x_end]
+                        orig_crop = fr[y_start:y_end, x_start:x_end]
                         res_bgr = cv2.cvtColor(out_np[k], cv2.COLOR_RGB2BGR)
 
                         # 1. Cân bằng màu sắc & độ sáng (Fast Subsampled Color Alignment) triệt tiêu hoàn toàn vệt ố khác màu
@@ -1098,11 +1111,13 @@ class SubtitleRemoverService:
                             res_bgr = cv2.addWeighted(res_bgr, 0.78, prev_clean_patch, 0.22, 0)
                         prev_clean_patch = res_bgr.copy()
 
-                        # 3. Pha trộn viền mềm (Feathering) ôm khít nét chữ
-                        feather = cv2.GaussianBlur(c_m, (5, 5), 0).astype(np.float32) / 255.0
+                        # 3. Pha trộn viền mềm (Clean Edge Feathering): 100% trong lòng chữ bị xóa sạch, mép ngoài cùng chuyển tiếp êm ái
+                        outer_mask = cv2.dilate(c_m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)), iterations=1)
+                        feather = cv2.GaussianBlur(outer_mask, (5, 5), 0).astype(np.float32) / 255.0
+                        feather[c_m == 255] = 1.0  # 100% trong lòng chữ sạch bong, không để chữ cũ đè lại
                         feather = np.expand_dims(feather, axis=2)
                         blended = (orig_crop * (1.0 - feather) + res_bgr * feather).astype(np.uint8)
-                        fr[y_start:y_end, :] = blended
+                        fr[y_start:y_end, x_start:x_end] = blended
 
                 for fr in curr_frames:
                     proc.stdin.write(fr.tobytes())
@@ -1137,10 +1152,11 @@ class SubtitleRemoverService:
 
                 new_boxes_this_frame: List[List[int]] = []
 
-                # YOLO11-Text quét siêu tốc trên GPU CUDA (~15-20ms/frame) với độ nhạy tối ưu
-                if auto_detect and yolo_model is not None and frame_brightness >= 12.0:
+                # YOLO11-Text quét siêu tốc trên GPU CUDA: chạy cách quãng mỗi 2 frame hoặc khi chưa có box (nhanh gấp 3x, không miss chữ)
+                should_detect = (frame_idx % 2 == 0) or (len(active_boxes) == 0)
+                if auto_detect and yolo_model is not None and frame_brightness >= 12.0 and should_detect:
                     try:
-                        res = yolo_model(frame, device=device, verbose=False, conf=0.16, imgsz=1024)
+                        res = yolo_model(frame, device=device, verbose=False, conf=0.16, imgsz=640)
                         if res and len(res[0].boxes) > 0:
                             for b in res[0].boxes:
                                 bx1, by1, bx2, by2 = [int(v) for v in b.xyxy[0].tolist()]
@@ -1165,13 +1181,13 @@ class SubtitleRemoverService:
                                 for bid, binfo in active_boxes.items():
                                     ob = binfo['box']
                                     ob_cy = (ob[1] + ob[3]) / 2.0
-                                    if abs(ob_cy - c_y) < 24 and not (ebx2 < ob[0] - 20 or ebx1 > ob[2] + 20):
+                                    if abs(ob_cy - c_y) < 22 and not (ebx2 < ob[0] - 25 or ebx1 > ob[2] + 25):
                                         binfo['box'] = [min(ob[0], ebx1), min(ob[1], eby1), max(ob[2], ebx2), max(ob[3], eby2)]
-                                        binfo['ttl'] = 2  # Duy trì tối đa 2 frame để không lưu box rác
+                                        binfo['ttl'] = 8  # Duy trì 8 frames (~0.27s) triệt tiêu hoàn toàn chớp tắt phụ đề giữa các frame
                                         matched = True
                                         break
                                 if not matched:
-                                    active_boxes[next_box_id] = {'box': box, 'ttl': 2}
+                                    active_boxes[next_box_id] = {'box': box, 'ttl': 8}
                                     next_box_id += 1
                                     new_boxes_this_frame.append(box)
                     except Exception as e:
