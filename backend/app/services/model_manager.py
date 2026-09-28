@@ -81,7 +81,7 @@ class ModelManagerService:
             return p2
 
         # 3. Kiểm tra trong ROOT_DIR/models
-        p3 = ROOT_DIR / "models" / filename
+        p3 = cfg.ROOT_DIR / "models" / filename
         if p3.exists() and p3.stat().st_size > 0:
             return p3
 
