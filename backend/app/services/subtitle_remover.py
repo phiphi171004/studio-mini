@@ -1079,13 +1079,28 @@ class SubtitleRemoverService:
 
                         out_np = (out_t.permute(0, 2, 3, 1).cpu().clamp(0, 1).numpy() * 255).astype(np.uint8)
 
+                    prev_clean_patch = None
                     for k, i in enumerate(active_indices):
                         fr = curr_frames[i]
                         c_m = masks[i][y_start:y_end, :]
+                        orig_crop = fr[y_start:y_end, :]
+                        res_bgr = cv2.cvtColor(out_np[k], cv2.COLOR_RGB2BGR)
+
+                        # 1. Cân bằng màu sắc & độ sáng (Fast Subsampled Color Alignment) triệt tiêu hoàn toàn vệt ố khác màu
+                        sub_unmasked = (c_m[::4, ::4] == 0)
+                        if sub_unmasked.any():
+                            shift = np.mean(orig_crop[::4, ::4][sub_unmasked].astype(np.float32) - res_bgr[::4, ::4][sub_unmasked].astype(np.float32), axis=0)
+                            if np.max(np.abs(shift)) > 1.0:
+                                res_bgr = np.clip(res_bgr.astype(np.float32) + shift, 0, 255).astype(np.uint8)
+
+                        # 2. Khử rung giật giữa các khung hình liên tiếp khi video có chuyển động (Temporal Smoothing)
+                        if prev_clean_patch is not None and prev_clean_patch.shape == res_bgr.shape:
+                            res_bgr = cv2.addWeighted(res_bgr, 0.78, prev_clean_patch, 0.22, 0)
+                        prev_clean_patch = res_bgr.copy()
+
+                        # 3. Pha trộn viền mềm (Feathering) ôm khít nét chữ
                         feather = cv2.GaussianBlur(c_m, (5, 5), 0).astype(np.float32) / 255.0
                         feather = np.expand_dims(feather, axis=2)
-                        res_bgr = cv2.cvtColor(out_np[k], cv2.COLOR_RGB2BGR)
-                        orig_crop = fr[y_start:y_end, :]
                         blended = (orig_crop * (1.0 - feather) + res_bgr * feather).astype(np.uint8)
                         fr[y_start:y_end, :] = blended
 
