@@ -36,6 +36,7 @@ except ImportError:
 
 class SubtitleRemoverService:
     _lama_model = None
+    _lama_onnx_session = None
     _yolo_model = None
     _device = None
     _dis_flow = None
@@ -103,6 +104,24 @@ class SubtitleRemoverService:
                     print(f"[VSR AI] Lỗi warmup CUDA: {e}")
             print("[VSR AI] Mô hình LaMa đã sẵn sàng hoạt động!")
         return cls._lama_model
+
+    @classmethod
+    def get_lama_onnx_session(cls):
+        if cls._lama_onnx_session is None:
+            try:
+                import onnxruntime as ort
+                models_dir = Path(__file__).resolve().parent.parent.parent / "models"
+                onnx_path = models_dir / "lama.onnx"
+                if not onnx_path.exists():
+                    raise FileNotFoundError(f"Không tìm thấy file lama.onnx tại {onnx_path}")
+                providers = ['DmlExecutionProvider', 'CPUExecutionProvider']
+                print(f"[VSR AI] Khởi động mô hình DirectML ONNX LaMa từ: {onnx_path}...")
+                cls._lama_onnx_session = ort.InferenceSession(str(onnx_path), providers=providers)
+                print("[VSR AI] Mô hình DirectML ONNX LaMa đã sẵn sàng hoạt động!")
+            except Exception as e:
+                print(f"[VSR AI] Không thể nạp DirectML ONNX ({e}).")
+                return None
+        return cls._lama_onnx_session
 
     @classmethod
     def warmup(cls):
@@ -823,6 +842,7 @@ class SubtitleRemoverService:
         output_video: Path,
         boxes: Optional[List[Dict[str, Any]]] = None,
         auto_detect: bool = True,
+        engine: str = "big_lama",
         progress_dict: Optional[Dict[str, Any]] = None,
         progress_callback: Optional[Any] = None
     ):
@@ -978,29 +998,53 @@ class SubtitleRemoverService:
                         crops.append(cv2.cvtColor(c_img, cv2.COLOR_BGR2RGB))
                         c_masks.append(c_msk)
 
-                    img_np = np.stack(crops, axis=0)
-                    msk_np = np.stack(c_masks, axis=0)
-                    t_img = torch.from_numpy(img_np).permute(0, 3, 1, 2).float().div(255.0).to(device)
-                    t_msk = torch.from_numpy(msk_np).unsqueeze(1).float().div(255.0).to(device)
-                    t_msk = (t_msk > 0.5).float()
+                    out_np = None
+                    if engine == "directml_onnx":
+                        onnx_sess = cls.get_lama_onnx_session()
+                        if onnx_sess is not None:
+                            try:
+                                out_list = []
+                                for idx in range(len(crops)):
+                                    c_bgr = cv2.cvtColor(crops[idx], cv2.COLOR_RGB2BGR)
+                                    m_orig = c_masks[idx]
+                                    h_c, w_c = c_bgr.shape[:2]
+                                    c_res = cv2.resize(c_bgr, (512, 512), interpolation=cv2.INTER_AREA)
+                                    m_res = cv2.resize(m_orig, (512, 512), interpolation=cv2.INTER_NEAREST)
+                                    in_img = (c_res.astype(np.float32) / 255.0).transpose(2, 0, 1)[None, ...]
+                                    in_msk = (m_res.astype(np.float32) / 255.0)[None, None, ...]
+                                    in_msk = (in_msk > 0.5).astype(np.float32)
+                                    res_onnx = onnx_sess.run(None, {'l_image_': in_img, 'l_mask_': in_msk})
+                                    out_c = res_onnx[0][0].transpose(1, 2, 0)
+                                    out_c = (np.clip(out_c, 0, 1) * 255).astype(np.uint8)
+                                    out_orig = cv2.resize(out_c, (w_c, h_c), interpolation=cv2.INTER_CUBIC)
+                                    out_list.append(cv2.cvtColor(out_orig, cv2.COLOR_BGR2RGB))
+                                out_np = np.stack(out_list, axis=0)
+                            except Exception as e:
+                                print(f"[VSR AI] Lỗi chạy DirectML ONNX ({e}). Tự động fallback sang PyTorch CUDA...")
+                                out_np = None
 
-                    # Đảm bảo H và W luôn chia hết cho 16 để LaMa không bao giờ bị lỗi lệch kích thước tensor
-                    orig_ch, orig_cw = t_img.shape[2], t_img.shape[3]
-                    pad_h = (16 - (orig_ch % 16)) % 16
-                    pad_w = (16 - (orig_cw % 16)) % 16
+                    if out_np is None:
+                        img_np = np.stack(crops, axis=0)
+                        msk_np = np.stack(c_masks, axis=0)
+                        t_img = torch.from_numpy(img_np).permute(0, 3, 1, 2).float().div(255.0).to(device)
+                        t_msk = torch.from_numpy(msk_np).unsqueeze(1).float().div(255.0).to(device)
+                        t_msk = (t_msk > 0.5).float()
 
-                    if pad_h > 0 or pad_w > 0:
-                        t_img = torch.nn.functional.pad(t_img, (0, pad_w, 0, pad_h), mode='reflect')
-                        t_msk = torch.nn.functional.pad(t_msk, (0, pad_w, 0, pad_h), mode='constant', value=0)
+                        orig_ch, orig_cw = t_img.shape[2], t_img.shape[3]
+                        pad_h = (16 - (orig_ch % 16)) % 16
+                        pad_w = (16 - (orig_cw % 16)) % 16
 
-                    with torch.no_grad():
-                        # Triệt tiêu hoàn toàn điểm ảnh vùng mask trước khi nạp vào LaMa để chống rò rỉ tần số FFC (bóng chữ)
-                        out_t = lama(t_img * (1.0 - t_msk), t_msk)
+                        if pad_h > 0 or pad_w > 0:
+                            t_img = torch.nn.functional.pad(t_img, (0, pad_w, 0, pad_h), mode='reflect')
+                            t_msk = torch.nn.functional.pad(t_msk, (0, pad_w, 0, pad_h), mode='constant', value=0)
 
-                    if pad_h > 0 or pad_w > 0:
-                        out_t = out_t[:, :, :orig_ch, :orig_cw]
+                        with torch.no_grad():
+                            out_t = lama(t_img * (1.0 - t_msk), t_msk)
 
-                    out_np = (out_t.permute(0, 2, 3, 1).cpu().clamp(0, 1).numpy() * 255).astype(np.uint8)
+                        if pad_h > 0 or pad_w > 0:
+                            out_t = out_t[:, :, :orig_ch, :orig_cw]
+
+                        out_np = (out_t.permute(0, 2, 3, 1).cpu().clamp(0, 1).numpy() * 255).astype(np.uint8)
 
                     for k, i in enumerate(active_indices):
                         fr = curr_frames[i]

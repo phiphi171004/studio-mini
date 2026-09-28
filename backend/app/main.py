@@ -136,6 +136,7 @@ async def start_dubbing(
     voice_id: str = Form(..., description="Mã giọng đọc đã chọn từ kho giọng"),
     remove_subtitles: bool = Form(True, description="Tự động xóa phụ đề/chữ gốc cũ trên video"),
     subtitle_removal_mode: str = Form("auto", description="Phương thức xóa phụ đề: 'auto' hoặc 'manual'"),
+    subtitle_removal_engine: str = Form("big_lama", description="Engine xóa: 'big_lama' (PyTorch CUDA) hoặc 'directml_onnx' (DirectML ONNX)"),
     manual_regions: Optional[str] = Form(None, description="JSON string chứa danh sách vùng xóa thủ công (nếu mode=manual)"),
     burn_subtitles: bool = Form(False, description="Chèn phụ đề mới trực tiếp vào video thành phẩm"),
     auto_inplace_overlay: bool = Form(False, description="Tự động phát hiện mọi chữ trên video và tạo thẻ đè tại chỗ"),
@@ -234,6 +235,7 @@ async def start_dubbing(
         srt_file_path: Optional[str],
         remove_subs: bool,
         sub_mode: str,
+        sub_engine: str,
         regions: Optional[List[dict]],
         burn_subs: bool,
         inplace_overlay: bool,
@@ -248,6 +250,7 @@ async def start_dubbing(
             custom_srt_path=srt_file_path,
             remove_subtitles=remove_subs,
             subtitle_removal_mode=sub_mode,
+            subtitle_removal_engine=sub_engine,
             manual_regions=regions,
             burn_subtitles=burn_subs,
             auto_inplace_overlay=inplace_overlay,
@@ -259,7 +262,7 @@ async def start_dubbing(
 
     threading.Thread(
         target=_run_worker,
-        args=(task_id, srt_arg, remove_subtitles, subtitle_removal_mode, parsed_regions, burn_subtitles, auto_inplace_overlay, subtitle_y, subtitle_h, subtitle_color, parsed_inplace_style),
+        args=(task_id, srt_arg, remove_subtitles, subtitle_removal_mode, subtitle_removal_engine, parsed_regions, burn_subtitles, auto_inplace_overlay, subtitle_y, subtitle_h, subtitle_color, parsed_inplace_style),
         daemon=True
     ).start()
 

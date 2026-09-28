@@ -183,6 +183,7 @@ async def run_dubbing_pipeline(
     custom_srt_path: Optional[str] = None,
     remove_subtitles: bool = True,
     subtitle_removal_mode: str = "auto",
+    subtitle_removal_engine: str = "big_lama",
     manual_regions: Optional[List[Dict[str, Any]]] = None,
     burn_subtitles: bool = False,
     auto_inplace_overlay: bool = False,
@@ -219,7 +220,8 @@ async def run_dubbing_pipeline(
         # [Bước 2/8] Xóa chữ & phụ đề cũ của video (AI Inpainting)
         target_video = input_video
         if remove_subtitles:
-            update_task_progress(db, task_id, "removing_subtitles: Khởi động bộ quét AI & phân tích video...", 10)
+            engine_label = "DirectML ONNX" if subtitle_removal_engine == "directml_onnx" else "Big-LaMa CUDA"
+            update_task_progress(db, task_id, f"removing_subtitles: Khởi động bộ quét AI ({engine_label})...", 10)
             clean_video = task_work_dir / f"clean_{input_video.name}"
             sub_task_id = f"sub_{task_id}"
 
@@ -234,6 +236,7 @@ async def run_dubbing_pipeline(
                 output_video=clean_video,
                 boxes=manual_regions,
                 auto_detect=is_auto,
+                engine=subtitle_removal_engine,
                 progress_callback=on_remover_progress
             )
 

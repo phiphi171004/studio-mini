@@ -137,6 +137,7 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
   const [autoInplaceOverlay, setAutoInplaceOverlay] = useState<boolean>(false);
   const [removeSubtitles, setRemoveSubtitles] = useState<boolean>(true);
   const [subtitleRemovalMode, setSubtitleRemovalMode] = useState<"auto" | "manual">("auto");
+  const [subtitleRemovalEngine, setSubtitleRemovalEngine] = useState<"big_lama" | "directml_onnx">("big_lama");
   const [manualRegions, setManualRegions] = useState<ManualRemovalRegion[]>([]);
   const [isManualEditorOpen, setIsManualEditorOpen] = useState<boolean>(false);
   const [isEraserMode, setIsEraserMode] = useState<boolean>(false);
@@ -606,6 +607,7 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
     formData.append("voice_id", selectedVoiceId);
     formData.append("remove_subtitles", removeSubtitles ? "true" : "false");
     formData.append("subtitle_removal_mode", subtitleRemovalMode);
+    formData.append("subtitle_removal_engine", subtitleRemovalEngine);
     if (removeSubtitles && subtitleRemovalMode === "manual" && manualRegions.length > 0) {
       // Map về format backend: x, y, w, h dạng tỷ lệ 0..1, start_time, end_time dạng giây
       const formattedRegions = manualRegions.map((r) => ({
@@ -1445,6 +1447,56 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
                   >
                     🎯 Khung Được Chọn
                   </button>
+
+                  {/* Engine AI Selector: Big-LaMa CUDA vs DirectML ONNX */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "2px",
+                      marginLeft: "4px",
+                      paddingLeft: "6px",
+                      borderLeft: "1px solid rgba(255, 255, 255, 0.15)",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.7rem", color: "#64748b", marginRight: "2px" }}>Engine:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSubtitleRemovalEngine("big_lama")}
+                      style={{
+                        backgroundColor: subtitleRemovalEngine === "big_lama" ? "#6366f1" : "transparent",
+                        color: subtitleRemovalEngine === "big_lama" ? "#fff" : "#94a3b8",
+                        border: "none",
+                        borderRadius: "5px",
+                        padding: "3px 6px",
+                        fontSize: "0.72rem",
+                        fontWeight: subtitleRemovalEngine === "big_lama" ? 700 : 500,
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      title="Chạy Big-LaMa chuẩn trên PyTorch CUDA (Tối ưu cho card rời NVIDIA)"
+                    >
+                      🔥 Big-LaMa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSubtitleRemovalEngine("directml_onnx")}
+                      style={{
+                        backgroundColor: subtitleRemovalEngine === "directml_onnx" ? "#10b981" : "transparent",
+                        color: subtitleRemovalEngine === "directml_onnx" ? "#fff" : "#94a3b8",
+                        border: "none",
+                        borderRadius: "5px",
+                        padding: "3px 6px",
+                        fontSize: "0.72rem",
+                        fontWeight: subtitleRemovalEngine === "directml_onnx" ? 700 : 500,
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      title="Chạy LaMa qua DirectML ONNX (Siêu nhẹ, tiết kiệm VRAM cho GPU yếu / Laptop)"
+                    >
+                      ⚡ DirectML ONNX
+                    </button>
+                  </div>
 
                   {/* Nút Cài đặt khung xóa khi ở mode manual */}
                   {subtitleRemovalMode === "manual" && (
