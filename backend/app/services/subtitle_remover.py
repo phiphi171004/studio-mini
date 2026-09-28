@@ -911,9 +911,19 @@ class SubtitleRemoverService:
                         "end_frame": end_fr
                     })
 
-            # Khởi động mô hình LaMa & YOLO-Text
-            lama = cls.get_lama_model()
+            # Khởi động mô hình LaMa & YOLO-Text theo đúng engine được chọn
+            lama = None
+            onnx_sess = None
             device = cls.get_device()
+
+            if engine == "directml_onnx":
+                onnx_sess = cls.get_lama_onnx_session()
+                if onnx_sess is None:
+                    print("[VSR AI] Không thể nạp DirectML ONNX, thử chuyển sang Big-LaMa CUDA...")
+                    lama = cls.get_lama_model()
+            else:
+                lama = cls.get_lama_model()
+
             yolo_model = cls.get_yolo_model() if auto_detect else None
 
             ffmpeg = get_ffmpeg_bin()
@@ -1024,6 +1034,8 @@ class SubtitleRemoverService:
                                 out_np = None
 
                     if out_np is None:
+                        if lama is None:
+                            lama = cls.get_lama_model()
                         img_np = np.stack(crops, axis=0)
                         msk_np = np.stack(c_masks, axis=0)
                         t_img = torch.from_numpy(img_np).permute(0, 3, 1, 2).float().div(255.0).to(device)
