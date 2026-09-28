@@ -1047,8 +1047,7 @@ class SubtitleRemoverService:
                                 out_np = None
 
                     if out_np is None:
-                        if lama is None:
-                            lama = cls.get_lama_model()
+                        lama_model = cls.get_lama_model()
                         img_np = np.stack(crops, axis=0)
                         msk_np = np.stack(c_masks, axis=0)
                         t_img = torch.from_numpy(img_np).permute(0, 3, 1, 2).float().div(255.0).to(device)
@@ -1064,7 +1063,7 @@ class SubtitleRemoverService:
                             t_msk = torch.nn.functional.pad(t_msk, (0, pad_w, 0, pad_h), mode='constant', value=0)
 
                         with torch.no_grad():
-                            out_t = lama(t_img * (1.0 - t_msk), t_msk)
+                            out_t = lama_model(t_img * (1.0 - t_msk), t_msk)
 
                         if pad_h > 0 or pad_w > 0:
                             out_t = out_t[:, :, :orig_ch, :orig_cw]
