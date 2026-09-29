@@ -136,7 +136,7 @@ async def start_dubbing(
     voice_id: str = Form(..., description="Mã giọng đọc đã chọn từ kho giọng"),
     remove_subtitles: bool = Form(True, description="Tự động xóa phụ đề/chữ gốc cũ trên video"),
     subtitle_removal_mode: str = Form("auto", description="Phương thức xóa phụ đề: 'auto' hoặc 'manual'"),
-    subtitle_removal_engine: str = Form("big_lama", description="Engine xóa: 'big_lama' (PyTorch CUDA) hoặc 'directml_onnx' (DirectML ONNX)"),
+    subtitle_removal_engine: str = Form("frosted_glass", description="Engine xóa: 'frosted_glass' (Khung Kính Mờ Trong Suốt), 'big_lama' (PyTorch CUDA), hoặc 'directml_onnx' (DirectML ONNX)"),
     manual_regions: Optional[str] = Form(None, description="JSON string chứa danh sách vùng xóa thủ công (nếu mode=manual)"),
     burn_subtitles: bool = Form(False, description="Chèn phụ đề mới trực tiếp vào video thành phẩm"),
     auto_inplace_overlay: bool = Form(False, description="Tự động phát hiện mọi chữ trên video và tạo thẻ đè tại chỗ"),

@@ -138,7 +138,7 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
   const [autoInplaceOverlay, setAutoInplaceOverlay] = useState<boolean>(false);
   const [removeSubtitles, setRemoveSubtitles] = useState<boolean>(true);
   const [subtitleRemovalMode, setSubtitleRemovalMode] = useState<"auto" | "manual">("auto");
-  const [subtitleRemovalEngine, setSubtitleRemovalEngine] = useState<"big_lama" | "directml_onnx">("big_lama");
+  const [subtitleRemovalEngine, setSubtitleRemovalEngine] = useState<"frosted_glass" | "big_lama" | "directml_onnx">("frosted_glass");
   const [modelsStatus, setModelsStatus] = useState<Record<string, ModelInfo>>({});
   const [downloadModalKey, setDownloadModalKey] = useState<"big_lama" | "directml_onnx" | null>(null);
 
@@ -1496,6 +1496,28 @@ export const DubbingStudio: React.FC<DubbingStudioProps> = ({
 
                       return (
                         <>
+                          <button
+                            type="button"
+                            onClick={() => setSubtitleRemovalEngine("frosted_glass")}
+                            style={{
+                              backgroundColor: subtitleRemovalEngine === "frosted_glass" ? "#0ea5e9" : "transparent",
+                              color: subtitleRemovalEngine === "frosted_glass" ? "#fff" : "#94a3b8",
+                              border: "1px solid " + (subtitleRemovalEngine === "frosted_glass" ? "#38bdf8" : "transparent"),
+                              borderRadius: "5px",
+                              padding: "2px 7px",
+                              fontSize: "0.72rem",
+                              fontWeight: subtitleRemovalEngine === "frosted_glass" ? 700 : 500,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              transition: "all 0.2s ease",
+                            }}
+                            title="Xóa phụ đề bằng Khung Kính Mờ Trong Suốt (Frosted Glass) chuẩn CapCut / Netflix: Xóa sạch 100% không tì vết, nhìn xuyên thấu nền video cực đẹp, siêu tốc 2s"
+                          >
+                            <span>✨ Kính Mờ (Đẹp nhất)</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {

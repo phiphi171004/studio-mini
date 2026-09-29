@@ -220,7 +220,12 @@ async def run_dubbing_pipeline(
         # [Bước 2/8] Xóa chữ & phụ đề cũ của video (AI Inpainting)
         target_video = input_video
         if remove_subtitles:
-            engine_label = "DirectML ONNX" if subtitle_removal_engine == "directml_onnx" else "Big-LaMa CUDA"
+            if subtitle_removal_engine == "frosted_glass":
+                engine_label = "Khung Kính Mờ (Frosted Glass)"
+            elif subtitle_removal_engine == "directml_onnx":
+                engine_label = "DirectML ONNX"
+            else:
+                engine_label = "Big-LaMa CUDA"
             update_task_progress(db, task_id, f"removing_subtitles: Khởi động bộ quét AI ({engine_label})...", 10)
             clean_video = task_work_dir / f"clean_{input_video.name}"
             sub_task_id = f"sub_{task_id}"
