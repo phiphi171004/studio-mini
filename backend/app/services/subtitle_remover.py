@@ -1163,9 +1163,27 @@ class SubtitleRemoverService:
                                 bw_box = bx2 - bx1
                                 bh_box = by2 - by1
 
-                                # Lọc kích thước nhiễu (cho phép cả chữ đơn lẻ, chữ Hán, chữ vuông)
-                                if bh_box < 8 or bh_box > 180 or bw_box < 8:
+                                # 1. Lọc kích thước cơ bản
+                                if bh_box < 8 or bh_box > 220 or bw_box < 10:
                                     continue
+
+                                b_conf = float(b.conf[0])
+                                c_y_box = (by1 + by2) / 2.0
+                                c_y_norm = c_y_box / float(h)
+                                aspect_ratio = bw_box / max(1.0, float(bh_box))
+
+                                # 2. BỘ LỌC BẢO VỆ VÙNG MẶT & CƠ THỂ NHÂN VẬT (Face-Zone Protection):
+                                # Vùng giữa màn hình (0.22 < c_y_norm < 0.58) là khuôn mặt, mắt, mũi, khuyên tai của nhân vật.
+                                # Tuyệt đối không xóa nhầm lông mày/mắt. Chỉ nhận nếu là banner chữ ngang lớn rõ ràng.
+                                if 0.22 <= c_y_norm < 0.58:
+                                    if aspect_ratio < 2.0 or bw_box < 130 or b_conf < 0.55:
+                                        continue
+
+                                # 3. Ở vùng dưới bàn tay & mặt bàn (0.58 <= c_y_norm):
+                                # Phụ đề thật luôn là dòng chữ nằm ngang trải dài. Lọc bỏ các chi tiết đồ vật nhỏ trên tay.
+                                if c_y_norm >= 0.58:
+                                    if bw_box < 45 and b_conf < 0.50:
+                                        continue
 
                                 # Lề an toàn bám trọn viền bóng và nét chữ
                                 pad_x = 10
