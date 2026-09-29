@@ -1172,17 +1172,21 @@ class SubtitleRemoverService:
                                 c_y_norm = c_y_box / float(h)
                                 aspect_ratio = bw_box / max(1.0, float(bh_box))
 
-                                # 2. BỘ LỌC BẢO VỆ VÙNG MẶT & CƠ THỂ NHÂN VẬT (Face-Zone Protection):
-                                # Vùng giữa màn hình (0.22 < c_y_norm < 0.58) là khuôn mặt, mắt, mũi, khuyên tai của nhân vật.
-                                # Tuyệt đối không xóa nhầm lông mày/mắt. Chỉ nhận nếu là banner chữ ngang lớn rõ ràng.
-                                if 0.22 <= c_y_norm < 0.58:
-                                    if aspect_ratio < 2.0 or bw_box < 130 or b_conf < 0.55:
+                                # 2. BẢO VỆ TUYỆT ĐỐI KHUÔN MẶT & CƠ THỂ NHÂN VẬT (100% Face & Subject Protection):
+                                # Vùng giữa màn hình (0.20 < c_y_norm < 0.62) là khuôn mặt, mắt, mũi, miệng, tóc, khuyên tai và bàn tay nhân vật.
+                                # Trong chế độ Tự Động Quét: CẤM 100% inpaint vào vùng này để khuôn mặt không bao giờ bị bóp méo hay biến dạng!
+                                if 0.20 < c_y_norm < 0.62:
+                                    continue
+
+                                # 3. Vùng phụ đề chính (Lower Subtitle Zone: c_y_norm >= 0.62):
+                                # Phụ đề thật luôn là câu chữ trải dài nằm ngang. Lọc bỏ các chi tiết đồ vật/nút áo nhỏ lẻ.
+                                if c_y_norm >= 0.62:
+                                    if bw_box < 50 or b_conf < 0.25:
                                         continue
 
-                                # 3. Ở vùng dưới bàn tay & mặt bàn (0.58 <= c_y_norm):
-                                # Phụ đề thật luôn là dòng chữ nằm ngang trải dài. Lọc bỏ các chi tiết đồ vật nhỏ trên tay.
-                                if c_y_norm >= 0.58:
-                                    if bw_box < 45 and b_conf < 0.50:
+                                # 4. Vùng tiêu đề trên (Top Banner: c_y_norm <= 0.20):
+                                if c_y_norm <= 0.20:
+                                    if bw_box < 80 or b_conf < 0.35:
                                         continue
 
                                 # Lề an toàn bám trọn viền bóng và nét chữ
